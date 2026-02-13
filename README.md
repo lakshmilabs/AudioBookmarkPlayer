@@ -11,19 +11,23 @@ Android audio player with bookmark export functionality for MIUI.
 
 ## Build APK
 
-### Using GitHub Actions (Easiest - Automatic)
+### Using GitHub Actions (Recommended)
 1. Push code to GitHub
-2. GitHub Actions will automatically build both debug and release APK
+2. GitHub Actions automatically builds the APK (no local setup needed)
 3. Go to Actions tab → latest workflow run → Artifacts
-4. Download `app-debug` or `app-release`
+4. Download `app-debug` (signed and ready to install)
 
-**Note:** Debug APK is auto-signed by Android build tools and works immediately. Release APK needs manual signing (see below).
+**The debug APK is already signed by Android and works immediately on your device.**
 
-### Manual Build
-```bash
-# This won't work locally without gradle wrapper jar
-# Use GitHub Actions instead
-```
+### Local Build (Not Recommended)
+Local building requires installing Android SDK and Gradle. It's much easier to use GitHub Actions.
+
+If you really want to build locally:
+1. Install Android SDK
+2. Install Gradle 7.5+
+3. Run: `gradle assembleDebug`
+
+But seriously, just use GitHub Actions - it's automatic and free.
 
 ### Signing Release APK (Optional)
 
