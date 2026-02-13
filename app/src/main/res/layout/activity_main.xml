@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@color/colorBackground"
     android:fillViewport="true">
 
     <LinearLayout
@@ -10,115 +12,187 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <TextView
-            android:id="@+id/fileNameText"
+        <!-- File name card -->
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="No file loaded"
-            android:textSize="18sp"
-            android:textStyle="bold"
-            android:gravity="center"
-            android:paddingBottom="16dp" />
-
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center">
+            app:cardBackgroundColor="@color/cardBackground"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp"
+            app:strokeWidth="0dp"
+            android:layout_marginBottom="12dp">
 
             <TextView
-                android:id="@+id/currentTimeText"
-                android:layout_width="wrap_content"
+                android:id="@+id/fileNameText"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="00:00:00"
-                android:textSize="16sp" />
+                android:text="No file loaded"
+                android:textSize="18sp"
+                android:textStyle="bold"
+                android:textColor="@color/colorOnSurface"
+                android:gravity="center"
+                android:padding="16dp" />
+        </com.google.android.material.card.MaterialCardView>
 
-            <SeekBar
-                android:id="@+id/seekBar"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:layout_marginEnd="8dp" />
-
-            <TextView
-                android:id="@+id/durationText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="00:00:00"
-                android:textSize="16sp" />
-        </LinearLayout>
-
-        <LinearLayout
+        <!-- Playback controls card -->
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center"
-            android:layout_marginTop="16dp">
+            app:cardBackgroundColor="@color/cardBackground"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp"
+            app:strokeWidth="0dp"
+            android:layout_marginBottom="12dp">
 
-            <Button
-                android:id="@+id/playPauseButton"
-                android:layout_width="0dp"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Play"
-                android:layout_marginEnd="8dp" />
+                android:orientation="vertical"
+                android:padding="16dp">
 
-            <Button
-                android:id="@+id/speedButton"
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Speed: 1.00x"
-                android:layout_marginStart="8dp" />
-        </LinearLayout>
+                <!-- Time + SeekBar -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
 
-        <TextView
-            android:id="@+id/speedText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="1.00x"
-            android:textSize="24sp"
-            android:textStyle="bold"
-            android:gravity="center"
-            android:layout_marginTop="8dp" />
+                    <TextView
+                        android:id="@+id/currentTimeText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="00:00:00"
+                        android:textSize="14sp"
+                        android:textColor="@color/colorSecondary"
+                        android:fontFamily="monospace" />
 
-        <Button
+                    <SeekBar
+                        android:id="@+id/seekBar"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:layout_marginEnd="8dp"
+                        android:progressTint="@color/colorPrimary"
+                        android:progressBackgroundTint="@color/seekBarTrack"
+                        android:thumbTint="@color/seekBarThumb" />
+
+                    <TextView
+                        android:id="@+id/durationText"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="00:00:00"
+                        android:textSize="14sp"
+                        android:textColor="@color/colorSecondary"
+                        android:fontFamily="monospace" />
+                </LinearLayout>
+
+                <!-- Play/Pause + Speed buttons -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center"
+                    android:layout_marginTop="12dp">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/playPauseButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Play"
+                        android:textSize="16sp"
+                        android:layout_marginEnd="6dp"
+                        app:cornerRadius="8dp" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/speedButton"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="Speed: 1.00x"
+                        android:textSize="14sp"
+                        android:layout_marginStart="6dp"
+                        android:textColor="@color/colorPrimary"
+                        app:strokeColor="@color/colorPrimary"
+                        app:cornerRadius="8dp" />
+                </LinearLayout>
+
+                <!-- Speed display -->
+                <TextView
+                    android:id="@+id/speedText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="1.00x"
+                    android:textSize="24sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/colorPrimary"
+                    android:gravity="center"
+                    android:layout_marginTop="8dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Add Bookmark button -->
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/addBookmarkButton"
             android:layout_width="match_parent"
             android:layout_height="60dp"
             android:text="ADD BOOKMARK"
             android:textSize="18sp"
-            android:layout_marginTop="24dp"
-            android:backgroundTint="#4CAF50" />
+            app:backgroundTint="@color/bookmarkGreen"
+            app:cornerRadius="12dp"
+            android:layout_marginBottom="12dp" />
 
-        <TextView
+        <!-- Bookmarks list card -->
+        <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Bookmarks:"
-            android:textSize="16sp"
-            android:textStyle="bold"
-            android:layout_marginTop="24dp"
-            android:layout_marginBottom="8dp" />
+            app:cardBackgroundColor="@color/cardBackground"
+            app:cardCornerRadius="12dp"
+            app:cardElevation="4dp"
+            app:strokeWidth="0dp"
+            android:layout_marginBottom="12dp">
 
-        <TextView
-            android:id="@+id/bookmarksListText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:minHeight="120dp"
-            android:text=""
-            android:textSize="14sp"
-            android:padding="12dp"
-            android:background="@android:drawable/edit_text" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="16dp">
 
-        <Button
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Bookmarks:"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="@color/colorOnSurface"
+                    android:layout_marginBottom="8dp" />
+
+                <TextView
+                    android:id="@+id/bookmarksListText"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:minHeight="100dp"
+                    android:text=""
+                    android:textSize="15sp"
+                    android:textColor="@color/colorSecondary"
+                    android:fontFamily="monospace"
+                    android:lineSpacingExtra="4dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <!-- Share to Keep button -->
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/exportButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="EXPORT BOOKMARKS"
+            android:text="SHARE TO KEEP"
             android:textSize="16sp"
-            android:layout_marginTop="16dp"
-            android:backgroundTint="#2196F3" />
+            app:backgroundTint="@color/shareBlue"
+            app:cornerRadius="12dp"
+            app:icon="@android:drawable/ic_menu_share"
+            app:iconGravity="textStart" />
 
     </LinearLayout>
 </ScrollView>
