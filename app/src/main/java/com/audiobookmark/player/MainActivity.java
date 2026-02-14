@@ -1,29 +1,46 @@
 package com.audiobookmark.player;
 
+import android.Manifest;
 import android.accounts.Account;
 import android.accounts.AccountManager;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.database.Cursor;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.provider.OpenableColumns;
+import android.util.Log;
 import android.widget.SeekBar;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import com.google.android.material.button.MaterialButton;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import org.json.JSONArray;
+import org.json.JSONException;
 
 public class MainActivity extends AppCompatActivity {
 
+    private static final String TAG = "AudioBookmark";
     private static final String PREFS_NAME = "AudioBookmarkPrefs";
     private static final String PREF_SELECTED_ACCOUNT = "selected_account";
+    private static final String PREF_FILE_URI = "file_uri";
+    private static final String PREF_FILE_NAME = "file_name";
+    private static final String PREF_POSITION = "playback_position";
+    private static final String PREF_BOOKMARKS = "bookmarks_json";
+    private static final String PREF_SHARED_BOOKMARKS = "shared_bookmarks_json";
+    private static final int PERMISSION_REQUEST_ACCOUNTS = 100;
 
     private MediaPlayer mediaPlayer;
     private TextView fileNameText;
@@ -37,10 +54,16 @@ public class MainActivity extends AppCompatActivity {
     private MaterialButton shareButton;
     private TextView bookmarksListText;
 
+    private Uri currentUri;
     private String currentFileName;
     private List<Integer> bookmarks;
+    private Set<Integer> sharedBookmarks; // bookmarks already sent to Keep
     private float[] speedOptions = {1.0f, 1.25f, 1.5f, 1.75f, 2.0f};
     private int currentSpeedIndex = 0;
+
+    // Used to defer loading a new file after saving unsaved bookmarks
+    private Uri pendingUri;
+    private Intent pendingIntent;
 
     private Handler handler = new Handler();
 
@@ -50,6 +73,7 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         bookmarks = new ArrayList<>();
+        sharedBookmarks = new HashSet<>();
 
         fileNameText = findViewById(R.id.fileNameText);
         currentTimeText = findViewById(R.id.currentTimeText);
@@ -62,34 +86,87 @@ public class MainActivity extends AppCompatActivity {
         shareButton = findViewById(R.id.exportButton);
         bookmarksListText = findViewById(R.id.bookmarksListText);
 
-        handleIncomingIntent(getIntent());
         setupListeners();
+
+        Intent intent = getIntent();
+        if (Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
+            handleIncomingIntent(intent);
+        } else {
+            // Launched via icon — restore saved state
+            restoreState();
+        }
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        handleIncomingIntent(intent);
-    }
-
-    private void handleIncomingIntent(Intent intent) {
-        if (Intent.ACTION_VIEW.equals(intent.getAction())) {
-            Uri uri = intent.getData();
-            if (uri != null) {
-                loadAudioFile(uri);
-            }
+        setIntent(intent);
+        if (Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
+            handleIncomingIntent(intent);
         }
     }
 
-    private void loadAudioFile(Uri uri) {
+    private void handleIncomingIntent(Intent intent) {
+        Uri newUri = intent.getData();
+        if (newUri == null) return;
+
+        // Try to persist URI permission so we can reopen the file later
+        try {
+            int flags = intent.getFlags() & (Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            if (flags != 0) {
+                getContentResolver().takePersistableUriPermission(newUri, flags);
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Could not persist URI permission", e);
+        }
+
+        // Check if it's the same file we already have loaded
+        if (currentUri != null && currentUri.toString().equals(newUri.toString())) {
+            // Same file — just continue, don't clear bookmarks
+            return;
+        }
+
+        // Different file — check for unsaved bookmarks
+        if (hasUnsavedBookmarks()) {
+            pendingUri = newUri;
+            pendingIntent = intent;
+            showSaveFirstDialog();
+        } else {
+            loadNewFile(newUri);
+        }
+    }
+
+    private void restoreState() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String savedUri = prefs.getString(PREF_FILE_URI, null);
+        String savedName = prefs.getString(PREF_FILE_NAME, null);
+        int savedPosition = prefs.getInt(PREF_POSITION, 0);
+        String bookmarksJson = prefs.getString(PREF_BOOKMARKS, null);
+        String sharedJson = prefs.getString(PREF_SHARED_BOOKMARKS, null);
+
+        if (savedUri == null) return; // Nothing saved, fresh start
+
+        currentUri = Uri.parse(savedUri);
+        currentFileName = savedName != null ? savedName : "Unknown";
+        fileNameText.setText(currentFileName);
+
+        // Restore bookmarks
+        bookmarks = jsonToList(bookmarksJson);
+        sharedBookmarks = new HashSet<>(jsonToList(sharedJson));
+        updateBookmarksList();
+
+        // Try to load the media file
+        if (!tryLoadMediaPlayer(currentUri, savedPosition)) {
+            // File no longer accessible
+            showFileUnavailableDialog();
+        }
+    }
+
+    private boolean tryLoadMediaPlayer(Uri uri, int position) {
         try {
             if (mediaPlayer != null) {
                 mediaPlayer.release();
             }
-
-            currentFileName = getBaseName(uri);
-            fileNameText.setText(currentFileName);
-
             mediaPlayer = new MediaPlayer();
             mediaPlayer.setDataSource(this, uri);
             mediaPlayer.prepare();
@@ -97,18 +174,81 @@ public class MainActivity extends AppCompatActivity {
             seekBar.setMax(mediaPlayer.getDuration());
             durationText.setText(formatTime(mediaPlayer.getDuration()));
 
+            if (position > 0 && position < mediaPlayer.getDuration()) {
+                mediaPlayer.seekTo(position);
+                seekBar.setProgress(position);
+                currentTimeText.setText(formatTime(position));
+            }
+
             mediaPlayer.setOnCompletionListener(mp -> {
                 playPauseButton.setText("Play");
                 handler.removeCallbacks(updateSeekBar);
             });
 
-            bookmarks.clear();
-            updateBookmarksList();
             playPauseButton.setText("Play");
-
-        } catch (IOException e) {
-            Toast.makeText(this, "Error loading file: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            return true;
+        } catch (IOException | IllegalArgumentException | SecurityException e) {
+            Log.w(TAG, "Failed to load media: " + e.getMessage());
+            mediaPlayer = null;
+            return false;
         }
+    }
+
+    private void showFileUnavailableDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, R.style.Theme_AudioBookmarkPlayer_Dialog);
+        builder.setTitle("File Unavailable");
+        builder.setMessage("The file \"" + currentFileName + "\" is no longer accessible.");
+
+        if (hasUnsavedBookmarks()) {
+            builder.setMessage("The file \"" + currentFileName + "\" is no longer accessible.\n\nYou have unsaved bookmarks. Would you like to save them to Google Keep?");
+            builder.setPositiveButton("Save to Keep", (d, w) -> shareToKeep());
+            builder.setNegativeButton("Discard", (d, w) -> clearSavedState());
+        } else {
+            builder.setPositiveButton("OK", (d, w) -> clearSavedState());
+        }
+        builder.setCancelable(false);
+        builder.show();
+    }
+
+    private void showSaveFirstDialog() {
+        new AlertDialog.Builder(this, R.style.Theme_AudioBookmarkPlayer_Dialog)
+                .setTitle("Unsaved Bookmarks")
+                .setMessage("You have unsaved bookmarks for \"" + currentFileName + "\". Save them to Google Keep before opening the new file?")
+                .setPositiveButton("Save First", (d, w) -> {
+                    // After the Keep intent returns, we'll load the pending file
+                    shareToKeepThenLoadPending();
+                })
+                .setNegativeButton("Discard", (d, w) -> {
+                    if (pendingUri != null) {
+                        loadNewFile(pendingUri);
+                        pendingUri = null;
+                        pendingIntent = null;
+                    }
+                })
+                .setNeutralButton("Cancel", null)
+                .setCancelable(true)
+                .show();
+    }
+
+    private void shareToKeepThenLoadPending() {
+        // Share current bookmarks, then on return load the pending file
+        doShareToKeep();
+        // After share intent, onResume will check pendingUri
+    }
+
+    private void loadNewFile(Uri uri) {
+        currentUri = uri;
+        currentFileName = getBaseName(uri);
+        fileNameText.setText(currentFileName);
+
+        bookmarks.clear();
+        sharedBookmarks.clear();
+
+        if (!tryLoadMediaPlayer(uri, 0)) {
+            Toast.makeText(this, "Error loading file", Toast.LENGTH_LONG).show();
+        }
+        updateBookmarksList();
+        saveState();
     }
 
     private void setupListeners() {
@@ -171,9 +311,9 @@ public class MainActivity extends AppCompatActivity {
         }
 
         int position = mediaPlayer.getCurrentPosition();
-        bookmarks.add(position);
-        Collections.sort(bookmarks);
+        bookmarks.add(position); // append to end, no sorting
         updateBookmarksList();
+        saveState();
 
         Toast.makeText(this, "Bookmark added: " + formatTime(position), Toast.LENGTH_SHORT).show();
     }
@@ -186,6 +326,8 @@ public class MainActivity extends AppCompatActivity {
         bookmarksListText.setText(sb.toString());
     }
 
+    // --- Keep sharing ---
+
     private void shareToKeep() {
         if (currentFileName == null || currentFileName.isEmpty()) {
             Toast.makeText(this, "No file loaded", Toast.LENGTH_SHORT).show();
@@ -197,30 +339,88 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
+        // Check if there are new (unshared) bookmarks
+        List<Integer> newBookmarks = getUnsharedBookmarks();
+        if (newBookmarks.isEmpty()) {
+            Toast.makeText(this, "All bookmarks already shared to Keep", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         String savedAccount = prefs.getString(PREF_SELECTED_ACCOUNT, null);
 
         if (savedAccount != null) {
             sendToKeep(savedAccount);
         } else {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.READ_CONTACTS},
+                        PERMISSION_REQUEST_ACCOUNTS);
+            } else {
+                showAccountPicker();
+            }
+        }
+    }
+
+    private void doShareToKeep() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String savedAccount = prefs.getString(PREF_SELECTED_ACCOUNT, null);
+        if (savedAccount != null) {
+            sendToKeep(savedAccount);
+        } else {
+            shareToKeep();
+        }
+    }
+
+    private List<Integer> getUnsharedBookmarks() {
+        List<Integer> unshared = new ArrayList<>();
+        for (int i = 0; i < bookmarks.size(); i++) {
+            // Use index-based tracking: bookmark at index i is "shared" if in sharedBookmarks set
+            // We store the index, not the value, to handle duplicate times
+            if (!sharedBookmarks.contains(i)) {
+                unshared.add(bookmarks.get(i));
+            }
+        }
+        return unshared;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == PERMISSION_REQUEST_ACCOUNTS) {
             showAccountPicker();
         }
     }
 
     private void showAccountPicker() {
         AccountManager accountManager = AccountManager.get(this);
-        Account[] accounts = accountManager.getAccountsByType("com.google");
+        Account[] allAccounts = accountManager.getAccounts();
 
-        if (accounts.length == 0) {
+        List<String> googleAccounts = new ArrayList<>();
+        for (Account account : allAccounts) {
+            if ("com.google".equals(account.type) ||
+                account.name.contains("@gmail.com") ||
+                account.name.contains("@googlemail.com")) {
+                googleAccounts.add(account.name);
+            }
+        }
+
+        if (googleAccounts.isEmpty()) {
+            for (Account account : allAccounts) {
+                if (account.name.contains("@")) {
+                    googleAccounts.add(account.name);
+                }
+            }
+        }
+
+        if (googleAccounts.isEmpty()) {
             Toast.makeText(this, "No Google accounts found on this device", Toast.LENGTH_LONG).show();
             sendToKeep(null);
             return;
         }
 
-        String[] accountNames = new String[accounts.length];
-        for (int i = 0; i < accounts.length; i++) {
-            accountNames[i] = accounts[i].name;
-        }
+        String[] accountNames = googleAccounts.toArray(new String[0]);
 
         new AlertDialog.Builder(this, R.style.Theme_AudioBookmarkPlayer_Dialog)
                 .setTitle("Select Google Account for Keep")
@@ -237,12 +437,15 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void sendToKeep(String account) {
-        StringBuilder body = new StringBuilder();
-        if (account != null) {
-            body.append("Account: ").append(account).append("\n");
+        List<Integer> newBookmarks = getUnsharedBookmarks();
+        if (newBookmarks.isEmpty()) {
+            Toast.makeText(this, "All bookmarks already shared", Toast.LENGTH_SHORT).show();
+            return;
         }
-        body.append("Label: Edit-times\n\n");
-        for (int bookmark : bookmarks) {
+
+        StringBuilder body = new StringBuilder();
+        body.append("#Edit-times\n\n");
+        for (int bookmark : newBookmarks) {
             body.append(formatTime(bookmark)).append("\n");
         }
 
@@ -250,18 +453,110 @@ public class MainActivity extends AppCompatActivity {
         shareIntent.setType("text/plain");
         shareIntent.putExtra(Intent.EXTRA_SUBJECT, currentFileName);
         shareIntent.putExtra(Intent.EXTRA_TEXT, body.toString());
-
-        // Target Google Keep specifically
         shareIntent.setPackage("com.google.android.keep");
 
         try {
             startActivity(shareIntent);
+            // Mark all current bookmarks as shared
+            for (int i = 0; i < bookmarks.size(); i++) {
+                sharedBookmarks.add(i);
+            }
+            saveState();
         } catch (android.content.ActivityNotFoundException e) {
-            // Fall back to generic share chooser if Keep is not installed
             shareIntent.setPackage(null);
-            startActivity(Intent.createChooser(shareIntent, "Share bookmarks"));
+            try {
+                startActivity(Intent.createChooser(shareIntent, "Share bookmarks"));
+                for (int i = 0; i < bookmarks.size(); i++) {
+                    sharedBookmarks.add(i);
+                }
+                saveState();
+            } catch (android.content.ActivityNotFoundException e2) {
+                Toast.makeText(this, "No app found to share bookmarks", Toast.LENGTH_LONG).show();
+            }
         }
     }
+
+    // --- State persistence ---
+
+    private void saveState() {
+        SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+        if (currentUri != null) {
+            editor.putString(PREF_FILE_URI, currentUri.toString());
+        }
+        if (currentFileName != null) {
+            editor.putString(PREF_FILE_NAME, currentFileName);
+        }
+        int position = (mediaPlayer != null) ? mediaPlayer.getCurrentPosition() : 0;
+        editor.putInt(PREF_POSITION, position);
+        editor.putString(PREF_BOOKMARKS, listToJson(bookmarks));
+        editor.putString(PREF_SHARED_BOOKMARKS, listToJson(new ArrayList<>(sharedBookmarks)));
+        editor.apply();
+    }
+
+    private void clearSavedState() {
+        SharedPreferences.Editor editor = getSharedPreferences(PREFS_NAME, MODE_PRIVATE).edit();
+        editor.remove(PREF_FILE_URI);
+        editor.remove(PREF_FILE_NAME);
+        editor.remove(PREF_POSITION);
+        editor.remove(PREF_BOOKMARKS);
+        editor.remove(PREF_SHARED_BOOKMARKS);
+        editor.apply();
+        currentUri = null;
+        currentFileName = null;
+        bookmarks.clear();
+        sharedBookmarks.clear();
+        updateBookmarksList();
+        fileNameText.setText("No file loaded");
+    }
+
+    private boolean hasUnsavedBookmarks() {
+        if (bookmarks.isEmpty()) return false;
+        return !getUnsharedBookmarks().isEmpty();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        saveState();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // If we have a pending file to load (after saving bookmarks to Keep), load it now
+        if (pendingUri != null) {
+            Uri uri = pendingUri;
+            pendingUri = null;
+            pendingIntent = null;
+            loadNewFile(uri);
+        }
+    }
+
+    // --- JSON helpers ---
+
+    private String listToJson(List<Integer> list) {
+        JSONArray arr = new JSONArray();
+        for (int val : list) {
+            arr.put(val);
+        }
+        return arr.toString();
+    }
+
+    private List<Integer> jsonToList(String json) {
+        List<Integer> list = new ArrayList<>();
+        if (json == null || json.isEmpty()) return list;
+        try {
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                list.add(arr.getInt(i));
+            }
+        } catch (JSONException e) {
+            Log.w(TAG, "Failed to parse bookmarks JSON", e);
+        }
+        return list;
+    }
+
+    // --- Utilities ---
 
     private Runnable updateSeekBar = new Runnable() {
         @Override
@@ -284,14 +579,32 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String getBaseName(Uri uri) {
-        String path = uri.getLastPathSegment();
-        if (path == null) return "Unknown";
+        String displayName = null;
 
-        int dotIndex = path.lastIndexOf('.');
-        if (dotIndex > 0) {
-            return path.substring(0, dotIndex);
+        if ("content".equals(uri.getScheme())) {
+            try (Cursor cursor = getContentResolver().query(uri, null, null, null, null)) {
+                if (cursor != null && cursor.moveToFirst()) {
+                    int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    if (nameIndex >= 0) {
+                        displayName = cursor.getString(nameIndex);
+                    }
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "Failed to query display name", e);
+            }
         }
-        return path;
+
+        if (displayName == null) {
+            displayName = uri.getLastPathSegment();
+        }
+
+        if (displayName == null) return "Unknown";
+
+        int dotIndex = displayName.lastIndexOf('.');
+        if (dotIndex > 0) {
+            return displayName.substring(0, dotIndex);
+        }
+        return displayName;
     }
 
     @Override
