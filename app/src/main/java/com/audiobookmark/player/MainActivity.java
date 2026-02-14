@@ -90,6 +90,9 @@ public class MainActivity extends AppCompatActivity {
 
         Intent intent = getIntent();
         if (Intent.ACTION_VIEW.equals(intent.getAction()) && intent.getData() != null) {
+            // Opened via "Open with" — load saved state first so we can detect
+            // unsaved bookmarks for the previous file, then handle the new file
+            loadSavedBookmarksOnly();
             handleIncomingIntent(intent);
         } else {
             // Launched via icon — restore saved state
@@ -134,6 +137,26 @@ public class MainActivity extends AppCompatActivity {
         } else {
             loadNewFile(newUri);
         }
+    }
+
+    /**
+     * Load only saved bookmarks/URI/filename into memory (no media player).
+     * Used when opening via "Open with" so we can detect unsaved bookmarks
+     * for the previous file before loading the new one.
+     */
+    private void loadSavedBookmarksOnly() {
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        String savedUri = prefs.getString(PREF_FILE_URI, null);
+        String savedName = prefs.getString(PREF_FILE_NAME, null);
+        String bookmarksJson = prefs.getString(PREF_BOOKMARKS, null);
+        String sharedJson = prefs.getString(PREF_SHARED_BOOKMARKS, null);
+
+        if (savedUri == null) return;
+
+        currentUri = Uri.parse(savedUri);
+        currentFileName = savedName != null ? savedName : "Unknown";
+        bookmarks = jsonToList(bookmarksJson);
+        sharedBookmarks = new HashSet<>(jsonToList(sharedJson));
     }
 
     private void restoreState() {
@@ -339,10 +362,8 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        // Check if there are new (unshared) bookmarks
-        List<Integer> newBookmarks = getUnsharedBookmarks();
-        if (newBookmarks.isEmpty()) {
-            Toast.makeText(this, "All bookmarks already shared to Keep", Toast.LENGTH_SHORT).show();
+        if (!hasUnsavedBookmarks()) {
+            Toast.makeText(this, "All bookmarks already saved to Keep", Toast.LENGTH_SHORT).show();
             return;
         }
 
@@ -437,15 +458,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void sendToKeep(String account) {
-        List<Integer> newBookmarks = getUnsharedBookmarks();
-        if (newBookmarks.isEmpty()) {
-            Toast.makeText(this, "All bookmarks already shared", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        if (bookmarks.isEmpty()) return;
 
+        // Always send ALL bookmarks (Keep can't append to existing notes,
+        // so each share creates a complete note — user deletes the old one)
         StringBuilder body = new StringBuilder();
         body.append("#Edit-times\n\n");
-        for (int bookmark : newBookmarks) {
+        for (int bookmark : bookmarks) {
             body.append(formatTime(bookmark)).append("\n");
         }
 
