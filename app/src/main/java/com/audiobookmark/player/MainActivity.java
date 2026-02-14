@@ -384,13 +384,28 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    /**
+     * Directly share to Keep, bypassing all checks (used from save-first dialog
+     * where we already know there are unsaved bookmarks).
+     */
     private void doShareToKeep() {
+        if (bookmarks.isEmpty()) return;
+
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         String savedAccount = prefs.getString(PREF_SELECTED_ACCOUNT, null);
+
         if (savedAccount != null) {
             sendToKeep(savedAccount);
         } else {
-            shareToKeep();
+            // No account saved yet — need to pick one first
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
+                    != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.READ_CONTACTS},
+                        PERMISSION_REQUEST_ACCOUNTS);
+            } else {
+                showAccountPicker();
+            }
         }
     }
 
