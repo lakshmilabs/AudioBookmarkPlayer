@@ -159,6 +159,19 @@
             app:cornerRadius="12dp"
             android:layout_marginBottom="12dp" />
 
+        <!-- Share to Keep button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/exportButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="SHARE TO KEEP"
+            android:textSize="16sp"
+            app:backgroundTint="@color/shareBlue"
+            app:cornerRadius="12dp"
+            app:icon="@android:drawable/ic_menu_share"
+            app:iconGravity="textStart"
+            android:layout_marginBottom="12dp" />
+
         <!-- Bookmarks list card -->
         <com.google.android.material.card.MaterialCardView
             android:layout_width="match_parent"
@@ -196,18 +209,6 @@
                     android:lineSpacingExtra="4dp" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
-
-        <!-- Share to Keep button -->
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/exportButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="SHARE TO KEEP"
-            android:textSize="16sp"
-            app:backgroundTint="@color/shareBlue"
-            app:cornerRadius="12dp"
-            app:icon="@android:drawable/ic_menu_share"
-            app:iconGravity="textStart" />
 
     </LinearLayout>
 </ScrollView>

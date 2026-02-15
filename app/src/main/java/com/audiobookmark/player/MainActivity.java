@@ -259,7 +259,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void shareToKeepThenLoadPending() {
         // Share current bookmarks, then on return load the pending file
-        doShareToKeep();
+        // Post to handler to ensure activity is fully ready
+        handler.post(() -> doShareToKeep());
         // After share intent, onResume will check pendingUri
     }
 
