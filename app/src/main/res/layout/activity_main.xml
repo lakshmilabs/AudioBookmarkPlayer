@@ -133,11 +133,26 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
+        <!-- Open File button -->
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/openFileButton"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="OPEN FILE"
+            android:textSize="16sp"
+            android:textColor="@color/colorPrimary"
+            app:strokeColor="@color/colorPrimary"
+            app:cornerRadius="12dp"
+            app:icon="@android:drawable/ic_menu_upload"
+            app:iconGravity="textStart"
+            android:layout_marginBottom="12dp" />
+
         <!-- Add Bookmark button -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/addBookmarkButton"
             android:layout_width="match_parent"
-            android:layout_height="60dp"
+            android:layout_height="120dp"
             android:text="ADD BOOKMARK"
             android:textSize="18sp"
             app:backgroundTint="@color/bookmarkGreen"

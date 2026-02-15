@@ -40,7 +40,9 @@ public class MainActivity extends AppCompatActivity {
     private static final String PREF_POSITION = "playback_position";
     private static final String PREF_BOOKMARKS = "bookmarks_json";
     private static final String PREF_SHARED_BOOKMARKS = "shared_bookmarks_json";
+    private static final String PREF_LAST_FOLDER = "last_folder";
     private static final int PERMISSION_REQUEST_ACCOUNTS = 100;
+    private static final int REQUEST_CODE_OPEN_FILE = 101;
 
     private MediaPlayer mediaPlayer;
     private TextView fileNameText;
@@ -51,6 +53,7 @@ public class MainActivity extends AppCompatActivity {
     private MaterialButton playPauseButton;
     private MaterialButton speedButton;
     private MaterialButton addBookmarkButton;
+    private MaterialButton openFileButton;
     private MaterialButton shareButton;
     private TextView bookmarksListText;
 
@@ -83,6 +86,7 @@ public class MainActivity extends AppCompatActivity {
         playPauseButton = findViewById(R.id.playPauseButton);
         speedButton = findViewById(R.id.speedButton);
         addBookmarkButton = findViewById(R.id.addBookmarkButton);
+        openFileButton = findViewById(R.id.openFileButton);
         shareButton = findViewById(R.id.exportButton);
         bookmarksListText = findViewById(R.id.bookmarksListText);
 
@@ -278,6 +282,7 @@ public class MainActivity extends AppCompatActivity {
         playPauseButton.setOnClickListener(v -> togglePlayPause());
         speedButton.setOnClickListener(v -> changeSpeed());
         addBookmarkButton.setOnClickListener(v -> addBookmark());
+        openFileButton.setOnClickListener(v -> openFilePicker());
         shareButton.setOnClickListener(v -> shareToKeep());
 
         seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -473,7 +478,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void sendToKeep(String account) {
-        if (bookmarks.isEmpty()) return;
+        if (bookmarks.isEmpty()) {
+            Log.w(TAG, "sendToKeep: bookmarks empty");
+            return;
+        }
+        if (currentFileName == null || currentFileName.isEmpty()) {
+            Log.w(TAG, "sendToKeep: currentFileName null or empty");
+            currentFileName = "Audio Bookmarks";
+        }
+
+        Log.d(TAG, "sendToKeep: sending " + bookmarks.size() + " bookmarks for " + currentFileName);
 
         // Always send ALL bookmarks (Keep can't append to existing notes,
         // so each share creates a complete note — user deletes the old one)
@@ -496,7 +510,9 @@ public class MainActivity extends AppCompatActivity {
                 sharedBookmarks.add(i);
             }
             saveState();
+            Log.d(TAG, "sendToKeep: Keep intent launched successfully");
         } catch (android.content.ActivityNotFoundException e) {
+            Log.w(TAG, "sendToKeep: Keep not found, trying generic chooser");
             shareIntent.setPackage(null);
             try {
                 startActivity(Intent.createChooser(shareIntent, "Share bookmarks"));
@@ -639,6 +655,44 @@ public class MainActivity extends AppCompatActivity {
             return displayName.substring(0, dotIndex);
         }
         return displayName;
+    }
+
+    private void openFilePicker() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.setType("audio/*");
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+
+        // Note: EXTRA_INITIAL_URI requires API 26+, so we can't restore last folder on older devices
+        // The system file picker will remember its own last location
+
+        startActivityForResult(intent, REQUEST_CODE_OPEN_FILE);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == REQUEST_CODE_OPEN_FILE && resultCode == RESULT_OK) {
+            if (data != null && data.getData() != null) {
+                Uri selectedUri = data.getData();
+
+                // Take persistable permission
+                try {
+                    int flags = Intent.FLAG_GRANT_READ_URI_PERMISSION;
+                    getContentResolver().takePersistableUriPermission(selectedUri, flags);
+                } catch (Exception e) {
+                    Log.w(TAG, "Could not take persistable URI permission", e);
+                }
+
+                // Check for unsaved bookmarks before loading new file
+                if (currentUri != null && !currentUri.toString().equals(selectedUri.toString()) && hasUnsavedBookmarks()) {
+                    pendingUri = selectedUri;
+                    showSaveFirstDialog();
+                } else {
+                    loadNewFile(selectedUri);
+                }
+            }
+        }
     }
 
     @Override
