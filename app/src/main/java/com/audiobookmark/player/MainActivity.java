@@ -395,21 +395,30 @@ public class MainActivity extends AppCompatActivity {
      * where we already know there are unsaved bookmarks).
      */
     private void doShareToKeep() {
-        if (bookmarks.isEmpty()) return;
+        Log.d(TAG, "doShareToKeep: called, bookmarks.size=" + bookmarks.size());
+        if (bookmarks.isEmpty()) {
+            Log.w(TAG, "doShareToKeep: bookmarks empty, returning");
+            return;
+        }
 
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         String savedAccount = prefs.getString(PREF_SELECTED_ACCOUNT, null);
+        Log.d(TAG, "doShareToKeep: savedAccount=" + (savedAccount != null ? "exists" : "null"));
 
         if (savedAccount != null) {
+            Log.d(TAG, "doShareToKeep: calling sendToKeep");
             sendToKeep(savedAccount);
         } else {
+            Log.d(TAG, "doShareToKeep: no saved account, showing picker");
             // No account saved yet — need to pick one first
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
                     != PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "doShareToKeep: requesting READ_CONTACTS permission");
                 ActivityCompat.requestPermissions(this,
                         new String[]{Manifest.permission.READ_CONTACTS},
                         PERMISSION_REQUEST_ACCOUNTS);
             } else {
+                Log.d(TAG, "doShareToKeep: showing account picker");
                 showAccountPicker();
             }
         }
