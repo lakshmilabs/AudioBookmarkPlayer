@@ -67,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
     // Used to defer loading a new file after saving unsaved bookmarks
     private Uri pendingUri;
     private Intent pendingIntent;
+    private boolean isSharingToKeep = false; // flag to prevent onResume from loading pending file during share
 
     private Handler handler = new Handler();
 
@@ -264,9 +265,11 @@ public class MainActivity extends AppCompatActivity {
 
     private void shareToKeepThenLoadPending() {
         Log.d(TAG, "shareToKeepThenLoadPending: called");
+        // Set flag to prevent onResume from loading pending file immediately
+        isSharingToKeep = true;
         // Share current bookmarks, then on return load the pending file
         doShareToKeep();
-        // After share intent, onResume will check pendingUri
+        // After share intent returns, onResume will check isSharingToKeep and pendingUri
     }
 
     private void loadNewFile(Uri uri) {
@@ -588,13 +591,20 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        // If we have a pending file to load (after saving bookmarks to Keep), load it now
-        if (pendingUri != null) {
-            Uri uri = pendingUri;
-            pendingUri = null;
-            pendingIntent = null;
-            loadNewFile(uri);
+        Log.d(TAG, "onResume: isSharingToKeep=" + isSharingToKeep + ", pendingUri=" + (pendingUri != null));
+
+        // If we just finished sharing to Keep, now load the pending file
+        if (isSharingToKeep) {
+            isSharingToKeep = false;
+            if (pendingUri != null) {
+                Log.d(TAG, "onResume: loading pending file after Keep share");
+                Uri uri = pendingUri;
+                pendingUri = null;
+                pendingIntent = null;
+                loadNewFile(uri);
+            }
         }
+        // Don't load pending file if isSharingToKeep is false (dialog still showing)
     }
 
     // --- JSON helpers ---
