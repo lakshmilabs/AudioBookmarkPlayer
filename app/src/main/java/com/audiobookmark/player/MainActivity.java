@@ -238,29 +238,34 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showSaveFirstDialog() {
+        Log.d(TAG, "showSaveFirstDialog: showing dialog, currentFileName=" + currentFileName + ", bookmarks.size=" + bookmarks.size());
         new AlertDialog.Builder(this, R.style.Theme_AudioBookmarkPlayer_Dialog)
                 .setTitle("Unsaved Bookmarks")
                 .setMessage("You have unsaved bookmarks for \"" + currentFileName + "\". Save them to Google Keep before opening the new file?")
                 .setPositiveButton("Save First", (d, w) -> {
+                    Log.d(TAG, "showSaveFirstDialog: Save First clicked");
                     // After the Keep intent returns, we'll load the pending file
                     shareToKeepThenLoadPending();
                 })
                 .setNegativeButton("Discard", (d, w) -> {
+                    Log.d(TAG, "showSaveFirstDialog: Discard clicked");
                     if (pendingUri != null) {
                         loadNewFile(pendingUri);
                         pendingUri = null;
                         pendingIntent = null;
                     }
                 })
-                .setNeutralButton("Cancel", null)
+                .setNeutralButton("Cancel", (d, w) -> {
+                    Log.d(TAG, "showSaveFirstDialog: Cancel clicked");
+                })
                 .setCancelable(true)
                 .show();
     }
 
     private void shareToKeepThenLoadPending() {
+        Log.d(TAG, "shareToKeepThenLoadPending: called");
         // Share current bookmarks, then on return load the pending file
-        // Post to handler to ensure activity is fully ready
-        handler.post(() -> doShareToKeep());
+        doShareToKeep();
         // After share intent, onResume will check pendingUri
     }
 
